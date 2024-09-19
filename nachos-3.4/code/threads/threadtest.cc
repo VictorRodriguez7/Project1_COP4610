@@ -1,19 +1,14 @@
-// threadtest.cc 
-//	Simple test case for the threads assignment.
-//
-//	Create two threads, and have them context switch
-//	back and forth between themselves by calling Thread::Yield, 
-//	to illustratethe inner workings of the thread system.
-//
-// Copyright (c) 1992-1993 The Regents of the University of California.
-// All rights reserved.  See copyright.h for copyright notice and limitation 
-// of liability and disclaimer of warranty provisions.
-
 #include "copyright.h"
 #include "system.h"
+#include "synch.h"
 
 // testnum is set in main.cc
 int testnum = 1;
+int SharedVariable;
+
+#ifdef HW1_SEMAPHORES
+Semaphore *sem = NULL;  // Declare semaphore globally, but initialize later
+#endif
 
 //----------------------------------------------------------------------
 // SimpleThread
@@ -24,71 +19,59 @@ int testnum = 1;
 //	purposes.
 //----------------------------------------------------------------------
 
-void
-SimpleThread(int which)
-{
-    int num;
-    
+void SimpleThread(int which) {
+    int num, val;
     for (num = 0; num < 5; num++) {
-	printf("*** thread %d looped %d times\n", which, num);
+        #ifdef HW1_SEMAPHORES
+        sem->P();  // Acquire semaphore before accessing shared variable
+        #endif
+
+        val = SharedVariable;
+        printf("*** thread %d sees value %d\n", which, val);
+        currentThread->Yield();
+        SharedVariable = val + 1;
+
+        #ifdef HW1_SEMAPHORES
+        sem->V();  // Release semaphore after updating shared variable
+        #endif
+        
         currentThread->Yield();
     }
-}
 
-//----------------------------------------------------------------------
-// ThreadTest1
-// 	Set up a ping-pong between two threads, by forking a thread 
-//	to call SimpleThread, and then calling SimpleThread ourselves.
-//----------------------------------------------------------------------
+    #ifdef HW1_SEMAPHORES
+    sem->P();  // Acquire semaphore before reading final value
+    #endif
 
-void
-ThreadTest1()
-{
-    DEBUG('t', "Entering ThreadTest1");
+    val = SharedVariable;
+    printf("Thread %d sees final value %d\n", which, val);
 
-    Thread *t = new Thread("forked thread");
-
-    t->Fork(SimpleThread, 1);
-    SimpleThread(0);
+    #ifdef HW1_SEMAPHORES
+    sem->V();  // Release semaphore
+    #endif
 }
 
 //----------------------------------------------------------------------
 // ThreadTest
-// 	Invoke a test routine.
+// 	Invoke a test routine with multiple threads.
+//
+//	n is the number of threads to fork.
 //----------------------------------------------------------------------
 
-#ifdef HW1_SEMAPHORES
-
-int numThreadsActive; // used to implement barrier upon completion
-
-void
-ThreadTest(int n) {
-    DEBUG('t', "Entering SimpleTest");
+void ThreadTest(int n) {
+    DEBUG('t', "Entering ThreadTest with %d threads\n", n);
     Thread *t;
-    numThreadsActive = n;
-    printf("NumthreadsActive = %d\n", numThreadsActive);
 
-    for(int i=1; i<n; i++)
-    {
+    #ifdef HW1_SEMAPHORES
+    // Initialize the semaphore with 1 to control access to SharedVariable
+    sem = new Semaphore("SharedVariable Semaphore", 1);
+    #endif
+
+    // Fork 'n' threads
+    for (int i = 1; i < n; i++) {
         t = new Thread("forked thread");
-        t->Fork(SimpleThread,i);
+        t->Fork(SimpleThread, i);
     }
+
+    // Run SimpleThread(0) on the original thread
     SimpleThread(0);
 }
-
-#else 
-
-void
-ThreadTest()
-{
-    switch (testnum) {
-    case 1:
-	ThreadTest1();
-	break;
-    default:
-	printf("No test specified.\n");
-	break;
-    }
-}
-
-#endif 

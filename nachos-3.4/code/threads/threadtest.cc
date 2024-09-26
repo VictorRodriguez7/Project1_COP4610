@@ -10,6 +10,10 @@ int SharedVariable;
 Semaphore *sem = NULL;  // Declare semaphore globally, but initialize later
 #endif
 
+#ifdef HW1_LOCKS
+Lock* lock = NULL;   // Initialize the lock with a debug name
+#endif
+
 //----------------------------------------------------------------------
 // SimpleThread
 // 	Loop 5 times, yielding the CPU to another ready thread 
@@ -19,7 +23,7 @@ Semaphore *sem = NULL;  // Declare semaphore globally, but initialize later
 //	purposes.
 //----------------------------------------------------------------------
 
-void SimpleThread(int which) {
+/*void SimpleThread(int which) {
     int num, val;
     for (num = 0; num < 5; num++) {
         #ifdef HW1_SEMAPHORES
@@ -48,7 +52,40 @@ void SimpleThread(int which) {
     #ifdef HW1_SEMAPHORES
     sem->V();  // Release semaphore
     #endif
+}*/
+
+void SimpleThread(int which) {
+    int num, val;
+
+    for (num = 0; num < 5; num++) {
+        #ifdef HW1_LOCKS
+        lock->Acquire();  // Acquire the lock before accessing shared variable
+        #endif
+
+        val = SharedVariable;
+        printf("*** thread %d sees value %d\n", which, val);
+        currentThread->Yield();
+        SharedVariable = val + 1;
+
+        #ifdef HW1_LOCKS
+        lock->Release();  // Release the lock after updating shared variable
+        #endif
+        
+        currentThread->Yield();
+    }
+
+    #ifdef HW1_LOCKS
+    lock->Acquire();  // Acquire the lock before reading final value
+    #endif
+
+    val = SharedVariable;
+    printf("Thread %d sees final value %d\n", which, val);
+
+    #ifdef HW1_LOCKS
+    lock->Release();  // Release the lock
+    #endif
 }
+
 
 //----------------------------------------------------------------------
 // ThreadTest
@@ -66,6 +103,11 @@ void ThreadTest(int n) {
     sem = new Semaphore("SharedVariable Semaphore", 1);
     #endif
 
+    #ifdef HW1_LOCKS
+    // Initialize the lock to control access to SharedVariable
+    lock = new Lock("SharedVariable Lock");
+    #endif
+
     // Fork 'n' threads
     for (int i = 1; i < n; i++) {
         t = new Thread("forked thread");
@@ -75,3 +117,4 @@ void ThreadTest(int n) {
     // Run SimpleThread(0) on the original thread
     SimpleThread(0);
 }
+
